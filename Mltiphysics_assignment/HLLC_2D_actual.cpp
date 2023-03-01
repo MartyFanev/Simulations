@@ -28,13 +28,14 @@ class Solver {
     Tensor<double,3> flux_all(Tensor<double,3> v,char option);
     Tensor<double,3> periodic_boundary(Tensor<double,3 >v);
     Tensor<double,3> transmissive_boundary(Tensor<double,3 >v);
-    void velocity_field();
+    void velocity_field(double time);
     double bilinear_interpolation(double a, double b,double c,double d);
     void ghost_boundary();
     void level_set_reinitialisation();
     void initialise_Sod();
     void save_plot();
     void SLIC();
+    MatrixXd advect_level_set(MatrixXd set,double vx,double vy,double time);
 
   private:
     double c;
@@ -55,6 +56,8 @@ class Solver {
     double ang_vel;
     double v_x_rot;
     double v_y_rot;
+    double t;
+    //double t;
     Tensor<double,3>  v;
     Tensor<double,3>  v_new;
      Tensor<double,3>  flux_initial;
@@ -88,16 +91,17 @@ Solver::Solver(){
   c = 0.8;
   loops=0;
   //cells = 200;
-  cellsx = 200;
-  cellsy = 200;
+  cellsx = 100;
+  cellsy = 100;
   a = 1.;
-  final_time = 1.0;
+  final_time = 0.4;
   x0 = 0.;
   y0 = 0.;
   x1 = 1.;
   y1 = 1.;
   dx = (x1-x0)/cellsx;
   dy = (y1-y0)/cellsy;
+  t=0;
   pi=2*std::acos(0.0);
   gamma = 1.4;
   ang_vel = 2*pi/final_time;
@@ -152,19 +156,53 @@ void Solver::initialise_input(){
       //level_set(i,j) =  (0.2-std::sqrt(pow((x-0.6),2)+pow((y-0.5),2)));
 
 //square - NOT WORKING
-      //level_set(i, j) = -std::max(abs(x - 0.6) - 0.2, abs(y - 0.5) - 0.2);
+      //level_set(i, j) = -std::max(abs(x - 0.6) - 0.2, abs(y - 0.5) - 0.2)
+
+      if(x <0.6 && y >= x-0.1 && y <= 1.1-x){
+        level_set(i,j) = (x-0.4);
+      }else if (x > 0.6 && y <= x-0.1 && y >= 1.1-x){
+        level_set(i,j) = (0.8-x);
+      }else if(y > 0.5 && x < y+0.1 && x > 1.1-y){
+        level_set(i,j) = (0.7-y);
+      }else if ( y < 0.5 && x > y+0.1 && x < 1.1-y){
+        level_set(i,j)=(y-0.3);
+      }
 
 // overlapping circles
 
-       double d1 = sqrt(pow((x - 0.6),2) + pow((y - 0.35),2)) - 0.2;
-       double d2 = sqrt(pow((x - 0.6),2) + pow((y - 0.65),2)) - 0.2;
-       level_set(i,j) = -std::min(d1,d2);
+        //double d1 = sqrt(pow((x - 0.6),2) + pow((y - 0.35),2)) - 0.2;
+        //double d2 = sqrt(pow((x - 0.6),2) + pow((y - 0.65),2)) - 0.2;
+        //level_set(i,j) = -std::min(d1,d2);
 
  //non overlapping circles
 
        //double d1 = sqrt(pow((x - 0.6),2) + pow((y - 0.25),2)) - 0.2;
        //double d2 = sqrt(pow((x - 0.6),2) + pow((y - 0.75),2)) - 0.2;
        //level_set(i,j) = -std::min(d1,d2);
+
+
+  // square 
+
+
+    // const double l = 0.4;
+    // const double cx = 0.6;
+    // const double cy = 0.5;
+    
+    // // Calculate distances to sides of square
+    // double d_top = y - (cy + l/2);
+    // double d_bottom = (cy - l/2) - y;
+    // double d_left = x - (cx - l/2);
+    // double d_right = (cx + l/2) - x;
+    
+    // // Calculate distances to corners approximated as circular arcs
+    // double d_top_left = sqrt(pow(x - cx + l/2, 2) + pow(y - cy + l/2, 2)) - l/2;
+    // double d_top_right = sqrt(pow(x - cx - l/2, 2) + pow(y - cy + l/2, 2)) - l/2;
+    // double d_bottom_left = sqrt(pow(x - cx + l/2, 2) + pow(y - cy - l/2, 2)) - l/2;
+    // double d_bottom_right = sqrt(pow(x - cx - l/2, 2) + pow(y - cy - l/2, 2)) - l/2;
+    
+    // // Find minimum distance and return signed distance
+    // double dist = std::min({d_top, d_bottom, d_left, d_right, d_top_left, d_top_right, d_bottom_left, d_bottom_right});
+    // level_set(i,j) = (x >= cx - l/2 && x <= cx + l/2 && y >= cy - l/2 && y <= cy + l/2) ? dist : -dist;
 
        //level_set(i,j) = std::min(0.2-std::sqrt(pow((x-0.6),2) + pow(y-0.25,2)),0.2 - std::sqrt(pow((x-0.6),2) + pow(y-0.75,2)));
 
@@ -223,8 +261,8 @@ void Solver::moving_rigid_body(){
     
 
         pressure =1.0;
-        velocity_x = +1.;
-        velocity_y= -1;
+        velocity_x = 1.;
+        velocity_y= 0.;
         density = 1.;
         energy = (pressure/(gamma-1)) + (0.5*density*(pow(velocity_x,2)+pow(velocity_y,2)));
 
@@ -306,7 +344,7 @@ void Solver::rotating_rigid_body(){
 
 
 // circle 
-      level_set(i,j) =  (0.1-std::sqrt(pow((x-0.2),2)+pow((y-0.5),2)));
+      level_set(i,j) =  (0.15-std::sqrt(pow((x-0.2),2)+pow((y-0.5),2)));
 
     
 
@@ -590,7 +628,7 @@ void Solver::ghost_boundary(){
        double normal_velocity_real = ((u_fluid(1)/u_fluid(0)))*normal_x + (u_fluid(3)/u_fluid(0))*normal_y;
        double tangential_velocity_x_real = ((u_fluid(1)/u_fluid(0))) - normal_velocity_real*normal_x , tangential_velocity_y_real = (u_fluid(3)/u_fluid(0)) - normal_velocity_real*normal_y;
 
-       double normal_velocity_rigid = -(normal_velocity_real - normal_moving);
+       double normal_velocity_rigid = -(normal_velocity_real - 2*normal_moving);
        double tangential_velocity_x_rigid = tangential_velocity_x_real, tangential_velocity_y_rigid =tangential_velocity_y_real;
 // HLLC  Right is the real liquid left is the rigid body
 
@@ -599,8 +637,8 @@ void Solver::ghost_boundary(){
       double cs_r = std::sqrt((gamma * (pressure_r)) /u_fluid(0));
 
       double total_velocity_l = pow((u_fluid(1)/u_fluid(0)),2) + pow(u_fluid(3)/u_fluid(0),2);
-      double pressure_l = ((u_fluid(2)-(0.5*u_fluid(0)*total_velocity_r))*(gamma-1));
-      double cs_l = std::sqrt((gamma * (pressure_r)) /u_fluid(0));
+      double pressure_l = ((u_fluid(2)-(0.5*u_fluid(0)*total_velocity_l))*(gamma-1));
+      double cs_l = std::sqrt((gamma * (pressure_l)) /u_fluid(0));
 
 
 
@@ -616,7 +654,7 @@ void Solver::ghost_boundary(){
         qr = 1.;
 
       }else if (pressure_star > pressure_r){
-        qr = pow(1+(((gamma+1)/(2*gamma))*(pressure_star/(pressure_r)-1)),0.5);
+        qr = pow(1+(((gamma+1)/(2*gamma))*((pressure_star/(pressure_r))-1)),0.5);
       }
 
 
@@ -637,12 +675,12 @@ void Solver::ghost_boundary(){
       //double s_r = std::min(abs(normal_velocity_rigid) + cs_r,abs(normal_velocity_real)+cs_l);
       //double s_l = -s_r;
 
-      double v_star = pressure_r - pressure_l + (u_fluid(0)*normal_velocity_real*(s_l-normal_velocity_real)) - (u_fluid(0)*normal_velocity_rigid*(s_r-normal_velocity_rigid))/(u_fluid(0)*(s_l-normal_velocity_real) - u_fluid(0)*(s_r-normal_velocity_rigid));
+      double v_star = (pressure_r - pressure_l + (u_fluid(0)*normal_velocity_real*(s_l-normal_velocity_real)) - (u_fluid(0)*normal_velocity_rigid*(s_r-normal_velocity_rigid)))/(u_fluid(0)*(s_l-normal_velocity_real) - u_fluid(0)*(s_r-normal_velocity_rigid));
     
       double density_star = u_fluid(0)*((s_r - normal_velocity_rigid)/(s_r - v_star));
       double density_velocity_star = density_star*v_star;
-      double energy_star = density_star * ((u_fluid(2))/u_fluid(0)) + (v_star-normal_velocity_rigid)*(v_star + ((pressure_r)/(u_fluid(0)*(s_r-normal_velocity_rigid))));
-      double velocity_x_star = (density_velocity_star/density_star)*normal_x + tangential_velocity_x_rigid, velocity_y_star = (density_velocity_star/density_star)*normal_y + tangential_velocity_y_rigid;
+      double energy_star = density_star * ((u_fluid(2))/u_fluid(0) + (v_star-normal_velocity_rigid)*(v_star + ((pressure_r)/(u_fluid(0)*(s_r-normal_velocity_rigid)))));
+      double velocity_x_star = (density_velocity_star/density_star)*normal_x + tangential_velocity_x_real, velocity_y_star = (density_velocity_star/density_star)*normal_y + tangential_velocity_y_real;
 
 
       u_fluid(0) = density_star;
@@ -673,10 +711,10 @@ for (int i =2 ; i<cellsx+3;i++){
 
       if (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0){ 
           //level_map(i,j) = pow(10,100);
-           v(i,j,0) = 1;
-           v(i,j,1) = 1;
-           v(i,j,2) = 1;
-           v(i,j,3) = 1;
+           //v(i,j,0) = 1;
+           //v(i,j,1) = 1;
+           //v(i,j,2) = 1;
+           //v(i,j,3) = 1;
 
       }
     }
@@ -693,7 +731,7 @@ for(int times = 0 ; times < 1;times++){
 
 
 
-         if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i,j) < level_set(i+1,j))){
+         if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i-1,j) < level_set(i,j))){
 
            double  normal_x = ((level_set(i+1,j) - level_set(i-1,j))/(2*dx)), normal_y = ((level_set(i,j+1) - level_set(i,j-1))/(2*dy));
 
@@ -701,18 +739,18 @@ for(int times = 0 ; times < 1;times++){
 
          for(int k = 0; k<4; k++ ){
 
-          if (normal_x < 0){
+          if (level_set(i+1,j) < level_set(i-1,j)){
             Qx = v(i+1,j,k); 
-          }else if (normal_x >0){
+          }else{
             Qx = v(i-1,j,k);
           }
           
-          if (normal_y <0){
+          if (level_set(i,j+1) < level_set(i,j-1)){
             Qy = v(i,j+1,k); 
-          }else if (normal_y > 0){
+          }else{
             Qy = v(i,j-1,k);
           }
-          v(i,j,k) = (normal_x*normal_x*Qx) + (normal_y*normal_y*Qy);  
+          v(i,j,k) = ((abs(normal_x)*Qx)/dx + ((abs(normal_y)*Qy)/dy))/((abs(normal_x))/dx + abs(normal_y)/dy);  
 
           //std::cout << v(i,j,0) << "\n";
 
@@ -732,7 +770,7 @@ for(int times = 0 ; times < 1;times++){
         for (int i =2 ; i<cellsx+3;i++){
        for(int j=2;j<cellsy+3;j++){
 
-          if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i,j+1) > level_set(i,j))){
+          if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i,j) > level_set(i,j-1))){
 
            double  normal_x = ((level_set(i+1,j) - level_set(i-1,j))/(2*dx)), normal_y = ((level_set(i,j+1) - level_set(i,j-1))/(2*dy));
 
@@ -740,19 +778,19 @@ for(int times = 0 ; times < 1;times++){
 
          for(int k = 0; k<4; k++ ){
 
-          if (normal_x <0){
+          if (level_set(i+1,j)< level_set(i-1,j-1)){
             Qx = v(i+1,j,k); 
-          }else if (normal_x > 0){
+          }else{
             Qx = v(i-1,j,k);
           }
           
-          if (normal_y <0){
+          if (level_set(i,j+1)< level_set(i,j-1)){
             Qy = v(i,j+1,k); 
-          }else if (normal_y > 0){
+          }else{
             Qy = v(i,j-1,k);
           }
           
-          v(i,j,k) = (normal_x*normal_x*Qx) + (normal_y*normal_y*Qy);  
+          v(i,j,k) = ((abs(normal_x)*Qx)/dx + ((abs(normal_y)*Qy)/dy))/((abs(normal_x))/dx + abs(normal_y)/dy);  
 
 
          
@@ -763,10 +801,10 @@ for(int times = 0 ; times < 1;times++){
          }
 
 
-    for (int i =2 ; i<cellsx+3;i++){
+    for (int i =cellsx+2 ; i>2;i--){
       for(int j=cellsy+2;j>2;j--){
 
-           if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i,j-1) > level_set(i,j))){
+           if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i,j) > level_set(i,j+1))){
             
             
           double  normal_x = ((level_set(i+1,j) - level_set(i-1,j))/(2*dx)), normal_y = ((level_set(i,j+1) - level_set(i,j-1))/(2*dy));
@@ -776,19 +814,19 @@ for(int times = 0 ; times < 1;times++){
 
          for(int k = 0; k<4; k++ ){
 
-          if (normal_x <0){
+          if (level_set(i+1,j)< level_set(i-1,j)){
             Qx = v(i+1,j,k); 
-          }else if (normal_x > 0){
+          }else{
             Qx = v(i-1,j,k);
           }
           
-          if (normal_y <0){
+          if (level_set(i,j+1)< level_set(i,j-1)){
             Qy = v(i,j+1,k); 
-          }else if (normal_y > 0){
+          }else{
             Qy = v(i,j-1,k);
           }
           
-          v(i,j,k) = (normal_x*normal_x*Qx) + (normal_y*normal_y*Qy);  
+          v(i,j,k) = ((abs(normal_x)*Qx)/dx + ((abs(normal_y)*Qy)/dy))/((abs(normal_x))/dx + abs(normal_y)/dy);  
        
 
          
@@ -801,9 +839,9 @@ for(int times = 0 ; times < 1;times++){
  
 
      for (int i = cellsx+2 ; i>2;i--){
-       for(int j=2;j<cellsy+3;j++){
+       for(int j=cellsy+2;j>2;j--){
 
-          if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i-1,j) > level_set(i,j))){
+          if( (!(((level_set(i,j)*level_set(i-1,j) < 0) || (level_set(i,j)*level_set(i,j-1) < 0)) && level_set(i,j) > 0 || ((level_set(i,j)*level_set(i+1,j) < 0) || (level_set(i,j)*level_set(i,j+1) < 0)) && level_set(i,j) > 0)  && level_set(i,j) > 0) && (level_set(i,j) > level_set(i+1,j))){
 
            double  normal_x = ((level_set(i+1,j) - level_set(i-1,j))/(2*dx)), normal_y = ((level_set(i,j+1) - level_set(i,j-1))/(2*dy));
 
@@ -811,19 +849,19 @@ for(int times = 0 ; times < 1;times++){
 
          for(int k = 0; k<4; k++ ){
 
-          if (normal_x <0){
+          if (level_set(i+1,j)< level_set(i-1,j)){
             Qx = v(i+1,j,k); 
-          }else if (normal_x > 0){
+          }else{
             Qx = v(i-1,j,k);
           }
           
-          if (normal_y <0){
+          if (level_set(i,j+1)< level_set(i,j-1)){
             Qy = v(i,j+1,k); 
-          }else if (normal_y > 0){
+          }else{
             Qy = v(i,j-1,k);
           }
           
-          v(i,j,k) = (normal_x*normal_x*Qx) + (normal_y*normal_y*Qy);  
+          v(i,j,k) = ((abs(normal_x)*Qx)/dx + ((abs(normal_y)*Qy)/dy))/((abs(normal_x))/dx + abs(normal_y)/dy);  
       
 
          
@@ -1073,7 +1111,7 @@ Tensor<double,3> Solver::flux_all(Tensor<double,3> v,char option){
         qr = 1.;
 
       }else if (pressure_star > pressure_r){
-        qr = pow(1+(((gamma+1)/(2*gamma))*(pressure_star/(pressure_r)-1)),0.5);
+        qr = pow(1+(((gamma+1)/(2*gamma))*((pressure_star/(pressure_r))-1)),0.5);
       }
 
 
@@ -1236,7 +1274,7 @@ Tensor<double,3> Solver::flux_all(Tensor<double,3> v,char option){
 
       }else if (pressure_star > pressure_l){
 
-        ql = pow(1+((gamma+1)/(2*gamma))*((pressure_star/(pressure_l))-1),0.5);
+        ql = pow(1+((gamma+1)/(2*gamma))*(((pressure_star/(pressure_l)))-1),0.5);
 
       }
 
@@ -1289,32 +1327,89 @@ Tensor<double,3> Solver::flux_all(Tensor<double,3> v,char option){
 return flux;
 }
 
-void Solver::velocity_field(){
 
 
+void Solver::velocity_field(double time){
+
+  double theta = ang_vel*time;
   double row,col;
   double max = level_set.maxCoeff(&row,&col);
 
   double max_x = x0 + (row-0.5)*dx;
   double max_y = y0 + (col-0.5)*dy;
 
-
   double angle = atan2(0.5-max_y,0.5-max_x);
 
-  std::cout << angle<<std::endl;
+
 
   v_x_rot = -std::sin(angle);
   v_y_rot = std::cos(angle);
 }
 
+MatrixXd Solver::advect_level_set(MatrixXd set,double vx,double vy,double time){
 
+
+  // double row,col;
+  // double max = level_set.maxCoeff(&row,&col);
+  // double velocity = 0.2;
+
+  // double max_x = x0 + (row-0.5)*dx;
+  // double max_y = y0 + (col-0.5)*dy;
+
+  // double r_x = 0.5 - max_x, r_y = 0.5 - max_y;
+  // //std::cout << max_x << " " << max_y << std::endl;
+  // double mag_r= std::sqrt(pow(r_x,2) + pow(r_y,2));
+
+  // double norm_r_x = r_x/mag_r, norm_r_y = r_y/mag_r; 
+
+  // //std::cout << norm_r_x << " " << norm_r_y << std::endl;
+
+  // double acc_x = norm_r_x*pow(velocity,2)/0.3 , acc_y = norm_r_y*pow(velocity,2)/0.3;
+
+  //  //std::cout << acc_x << " " << acc_y << std::endl;
+
+  // v_x_rot = v_x_rot+acc_x,v_y_rot = v_y_rot+acc_y ;
+
+  // std::cout << v_x_rot << " " << v_y_rot << std::endl;
+
+  // double x_centre = 0.2+v_x_rot, y_centre = 0.5 + v_y_rot;
+
+  // //std::cout << x_centre << " " << y_centre << std::endl; 
+  
+ 
+  double adv_x = -0.3*std::cos(ang_vel*time);
+  double adv_y = -0.3*std::sin(ang_vel*time);
+
+
+  v_x_rot =  0.3*ang_vel*std::sin(ang_vel*time);
+  v_y_rot = -0.3*ang_vel*std::cos(ang_vel*time);
+
+
+ for(int i=0; i < cellsx+4; i++){ // changed from v.cols to cells+2
+      for (int j =0 ; j<cellsy+4; j++){
+
+      double x = x0 + (i-0.5)*dx;
+      double y = y0 + (j-0.5)*dy;
+
+  level_set_new(i,j) = (0.15-std::sqrt(pow((x-0.5-adv_x),2)+pow((y-0.5-adv_y),2)));
+
+
+      }}
+
+return level_set_new;
+
+}
 
 void Solver::simulate(){
  
-  //initialise_input_explosion();
+ //v_x_rot = 0.;
+  //v_y_rot = 0.;
+
+
+  //initialise_input_explosion();eal = ((u_fluid(1)/u_fluid(0))) - n
   //initialise_Sod();
-  //initialise_input();
-  moving_rigid_body();
+  initialise_input();
+  //moving_rigid_body();
   //moving_rigid_body_moving();
   //rotating_rigid_body();
   //ghost_boundary(level_set);
@@ -1327,15 +1422,14 @@ void Solver::simulate(){
 
 
   do{
-     loops= loops+1;
-   
-   //velocity_field();
-  v_x_rot = 0;
+   //double angle = ang_vel*t;
+  v_x_rot = -0.;
   v_y_rot = 0;
    ghost_boundary();
    v = transmissive_boundary(v);
    dt = compute_time_step();
    //level_set = evolve_level_set(level_set,v_x_rot,v_y_rot);
+   //level_set = advect_level_set(level_set,v_x_rot,v_y_rot,t);
    std::cout << dt << t << std::endl;
 
    t = t+dt;
@@ -1362,17 +1456,26 @@ void Solver::simulate(){
       for (int i=2; i<cellsx+2;i++){
         for (int j = 2 ; j<cellsy+2;j++){
 
+    double velocity_x = (v(i,j,1)/v(i,j,0));
+    double velocity_y = v(i,j,3)/v(i,j,0);
+    double kinetic_energy = 0.5*v(i,j,0)*(pow(velocity_x,2)+pow(velocity_y,2));
+    double pressure = (v(i,j,2)-kinetic_energy)*(gamma-1); 
+
               double x = x0 + (i-0.5)*dx;
               double y = y0 + (j-0.5)*dy;
+
 
           for (int k =0 ; k<4;k++){
               v_new(i,j,k) = v_new(i,j,k) - (dt/dy) * (flux(i,j,k)-flux(i,j-1,k));       
             }
-            double div_p = (v_new(i+1,j,0)-v_new(i-1,j,0))/2*dx + (v_new(i,j+1,0)-v_new(i,j-1,0))/2*dy;
-            double mock_shlieren = std::exp((-20*div_p)/1000*v_new(i,j,0));
+           double div_p = (v(i+1,j,0)-v(i-1,j,0))/(2*dx) + (v(i,j+1,0)-v(i,j-1,0))/(2*dy);
+            double mock_shlieren = std::exp((-20*abs(div_p))/(1000*v(i,j,0)));
+
+              
+  
 
 
-          output_animation << t << " " << x << " " << y << " " << v_new(i,j,0) << " " << mock_shlieren << " " << level_set(i,j)<< "\n";
+          output_animation << t << " " << x << " " << y << " " << v_new(i,j,0) << " " << mock_shlieren << " "  << pressure << " " <<  level_set(i,j)<< "\n";
 
           }
           output_animation << " " << "\n";
